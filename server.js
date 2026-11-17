@@ -12,18 +12,33 @@ const PORT = process.env.PORT || 3000;
 
 const { Pool } = pg;
 
+if (!process.env.DATABASE_URL) {
+    console.error('ERRO: DATABASE_URL não foi configurada nas variáveis de ambiente.');
+    process.exit(1);
+}
+
 const db = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    },
-    max: 5,
-    connectionTimeoutMillis: 15000,
-    idleTimeoutMillis: 30000
+    // Supabase exige SSL nas conexões PostgreSQL.
+    ssl: { rejectUnauthorized: false },
+
+    // Pool menor e conexões persistentes para reduzir quedas por inatividade.
+    max: 3,
+    min: 0,
+    connectionTimeoutMillis: 20000,
+    idleTimeoutMillis: 10000,
+    maxUses: 7500,
+    allowExitOnIdle: false,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
+    application_name: 'LiberaCESF'
 });
 
+// Uma conexão ociosa pode ser encerrada pelo Supabase ou pela rede.
+// O pg remove a conexão com erro do pool; este listener evita erro não tratado.
 db.on('error', (err) => {
-    console.error('Erro inesperado na conexão:', err.message);
+    console.error('Conexão PostgreSQL perdida:', err.message);
+    console.error('Confira se DATABASE_URL usa o Session Pooler do Supabase e se a rede permite a porta configurada.');
 });
 
 app.use(cors());
