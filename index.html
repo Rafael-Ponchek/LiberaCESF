@@ -1,0 +1,311 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AUTORIZA CESF</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f1f4f9;
+            color: #263445;
+            padding: 30px 15px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: auto;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        header h1 {
+            color: #294161;
+            margin-bottom: 8px;
+        }
+
+        .card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 12px #00000012;
+        }
+
+        h2 {
+            color: #294161;
+            margin-bottom: 18px;
+            font-size: 20px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 12px;
+            border: 1px solid #ccd4df;
+            border-radius: 6px;
+        }
+
+        button {
+            padding: 11px 18px;
+            background: #294161;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #1c304a;
+        }
+
+        .botoes {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .resultado {
+            margin-top: 15px;
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: left;
+        }
+
+        th {
+            background: #eaf0f7;
+        }
+
+        #mensagem {
+            margin-top: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <header>
+        <h1>AUTORIZA CESF</h1>
+        <p>Sistema de gerenciamento de liberações</p>
+    </header>
+
+    <section class="card">
+        <h2>Cadastrar usuário</h2>
+
+        <form id="formUsuario">
+            <select id="tipoUsuario" required>
+                <option value="">Selecione o tipo</option>
+                <option value="adm">Administrador</option>
+                <option value="monitor">Monitor</option>
+                <option value="professor">Professor</option>
+            </select>
+
+            <input type="text" id="nome" placeholder="Nome" required>
+
+            <input type="email" id="email" placeholder="E-mail" required>
+
+            <input type="password" id="senha" placeholder="Senha" required>
+
+            <button type="submit">Cadastrar usuário</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Registrar liberação</h2>
+
+        <form id="formLiberacao">
+
+            <input
+                type="text"
+                id="nomeProfessor"
+                placeholder="Nome do professor"
+                required
+            >
+
+            <input
+                type="text"
+                id="nomeAluno"
+                placeholder="Nome do aluno"
+                required
+            >
+
+            <input
+                type="text"
+                id="turma"
+                placeholder="Turma"
+                required
+            >
+
+            <input
+                type="date"
+                id="data"
+                required
+            >
+
+            <button type="submit">Registrar liberação</button>
+        </form>
+    </section>
+
+    <section class="card">
+        <h2>Consultar registros</h2>
+
+        <div class="botoes">
+            <button onclick="buscar('adm')">Administradores</button>
+            <button onclick="buscar('monitor')">Monitores</button>
+            <button onclick="buscar('professor')">Professores</button>
+            <button onclick="buscar('liberacao')">Liberações</button>
+        </div>
+
+        <div class="resultado">
+            <table>
+                <thead id="cabecalho"></thead>
+                <tbody id="corpo"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <p id="mensagem"></p>
+
+</div>
+
+<script>
+const API = 'http://localhost:3000';
+
+const mensagem = document.getElementById('mensagem');
+
+document.getElementById('formUsuario').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const tipo = document.getElementById('tipoUsuario').value;
+
+    const dados = {
+        nome: document.getElementById('nome').value,
+        email: document.getElementById('email').value,
+        senha: document.getElementById('senha').value
+    };
+
+    try {
+        const resposta = await fetch(`${API}/${tipo}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+
+        const resultado = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(resultado.erro);
+        }
+
+        mensagem.textContent = resultado.mensagem;
+        document.getElementById('formUsuario').reset();
+
+    } catch (erro) {
+        mensagem.textContent = 'Erro: ' + erro.message;
+    }
+});
+
+document.getElementById('formLiberacao').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const dados = {
+        nomeProfessor: document.getElementById('nomeProfessor').value,
+        nomeAluno: document.getElementById('nomeAluno').value,
+        turma: document.getElementById('turma').value,
+        data: document.getElementById('data').value
+    };
+
+    try {
+        const resposta = await fetch(`${API}/liberacao`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dados)
+        });
+
+        const resultado = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(resultado.erro);
+        }
+
+        mensagem.textContent = resultado.mensagem;
+        document.getElementById('formLiberacao').reset();
+
+    } catch (erro) {
+        mensagem.textContent = 'Erro: ' + erro.message;
+    }
+});
+
+async function buscar(tipo) {
+    try {
+        const resposta = await fetch(`${API}/${tipo}`);
+
+        const dados = await resposta.json();
+
+        if (!resposta.ok) {
+            throw new Error(dados.erro);
+        }
+
+        const cabecalho = document.getElementById('cabecalho');
+        const corpo = document.getElementById('corpo');
+
+        cabecalho.innerHTML = '';
+        corpo.innerHTML = '';
+
+        if (dados.length === 0) {
+            corpo.innerHTML = '<tr><td>Nenhum registro encontrado.</td></tr>';
+            return;
+        }
+
+        const colunas = Object.keys(dados[0]);
+
+        cabecalho.innerHTML =
+            '<tr>' + colunas.map(c => `<th>${c}</th>`).join('') + '</tr>';
+
+        dados.forEach(item => {
+            const linha = document.createElement('tr');
+
+            colunas.forEach(coluna => {
+                const celula = document.createElement('td');
+                celula.textContent = item[coluna] ?? '';
+                linha.appendChild(celula);
+            });
+
+            corpo.appendChild(linha);
+        });
+
+    } catch (erro) {
+        mensagem.textContent = 'Erro: ' + erro.message;
+    }
+}
+</script>
+
+</body>
+</html>
