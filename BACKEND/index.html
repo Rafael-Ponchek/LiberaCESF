@@ -1,0 +1,441 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiberaCESF</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 25px;
+      background: #f2f4f7;
+      color: #222;
+    }
+
+    h1, h2 {
+      color: #294161;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    .card {
+      background: white;
+      padding: 22px;
+      margin-bottom: 22px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px #00000012;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    input, select, button {
+      padding: 11px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 15px;
+    }
+
+    button {
+      cursor: pointer;
+      border: none;
+      background: #294161;
+      color: white;
+    }
+
+    button:hover {
+      opacity: 0.88;
+    }
+
+    .botoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .excluir {
+      background: #b42318;
+      padding: 7px 12px;
+    }
+
+    .excluir-todos {
+      background: #8b1e16;
+    }
+
+    .tabela-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      min-width: 600px;
+    }
+
+    th, td {
+      padding: 14px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background: #294161;
+      color: white;
+    }
+
+    tr:hover {
+      background: #f5f7fa;
+    }
+
+    #mensagem {
+      margin-top: 12px;
+      font-weight: bold;
+    }
+
+    @media (max-width: 600px) {
+      body {
+        padding: 12px;
+      }
+
+      .card {
+        padding: 15px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <h1>LiberaCESF</h1>
+
+    <section class="card">
+      <h2>Cadastrar administrador</h2>
+
+      <form id="formAdm">
+        <input id="admNome" placeholder="Nome" required>
+        <input id="admEmail" type="email" placeholder="Email" required>
+        <input id="admSenha" type="password" placeholder="Senha" required>
+        <button type="submit">Cadastrar administrador</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Cadastrar monitor</h2>
+
+      <form id="formMonitor">
+        <input id="monitorNome" placeholder="Nome" required>
+        <input id="monitorEmail" type="email" placeholder="Email" required>
+        <input id="monitorSenha" type="password" placeholder="Senha" required>
+        <button type="submit">Cadastrar monitor</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Cadastrar professor</h2>
+
+      <form id="formProfessor">
+        <input id="professorNome" placeholder="Nome" required>
+        <input id="professorEmail" type="email" placeholder="Email" required>
+        <input id="professorSenha" type="password" placeholder="Senha" required>
+        <button type="submit">Cadastrar professor</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Registrar liberação</h2>
+
+      <form id="formLiberacao">
+        <input id="nomeProfessor" placeholder="Nome do professor" required>
+        <input id="nomeAluno" placeholder="Nome do aluno" required>
+        <input id="turma" placeholder="Turma" required>
+
+        <input id="data"type="datetime-local"required>
+
+        <button type="submit">Registrar liberação</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Consultar tabelas</h2>
+
+      <div class="botoes">
+        <button onclick="buscar('adm')">Administradores</button>
+        <button onclick="buscar('monitor')">Monitores</button>
+        <button onclick="buscar('professor')">Professores</button>
+        <button onclick="buscar('liberacao')">Liberações</button>
+      </div>
+
+      <div id="mensagem"></div>
+
+      <div id="areaTabela"></div>
+    </section>
+
+  </div>
+
+  <script>
+    const API = "";
+
+    let tabelaAtual = "";
+
+    function mostrarMensagem(texto, erro = false) {
+      const mensagem = document.getElementById("mensagem");
+      mensagem.textContent = texto;
+      mensagem.style.color = erro ? "#b42318" : "#237a3b";
+    }
+
+    async function requisicao(url, opcoes = {}) {
+      const resposta = await fetch(API + url, {
+        ...opcoes,
+        headers: {
+          "Content-Type": "application/json",
+          ...opcoes.headers
+        }
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados.erro || "Erro na requisição.");
+      }
+
+      return dados;
+    }
+
+    async function cadastrarUsuario(tipo, nome, email, senha) {
+      try {
+        await requisicao("/" + tipo, {
+          method: "POST",
+          body: JSON.stringify({ nome, email, senha })
+        });
+
+        mostrarMensagem("Cadastro realizado com sucesso!");
+      } catch (erro) {
+        mostrarMensagem(erro.message, true);
+      }
+    }
+
+    document.getElementById("formAdm").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      cadastrarUsuario(
+        "adm",
+        admNome.value,
+        admEmail.value,
+        admSenha.value
+      );
+
+      e.target.reset();
+    });
+
+    document.getElementById("formMonitor").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      cadastrarUsuario(
+        "monitor",
+        monitorNome.value,
+        monitorEmail.value,
+        monitorSenha.value
+      );
+
+      e.target.reset();
+    });
+
+    document.getElementById("formProfessor").addEventListener("submit", (e) => {
+      e.preventDefault();
+
+      cadastrarUsuario(
+        "professor",
+        professorNome.value,
+        professorEmail.value,
+        professorSenha.value
+      );
+
+      e.target.reset();
+    });
+
+    // CADASTRAR LIBERAÇÃO
+    document.getElementById("formLiberacao").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      try {
+        const valorData = document.getElementById("data").value;
+
+        // Converte o horário local do navegador para ISO com UTC.
+        // O PostgreSQL timestamptz interpreta esse instante corretamente.
+        const dataISO = new Date(valorData).toISOString();
+
+        await requisicao("/liberacao", {
+          method: "POST",
+          body: JSON.stringify({
+            nomeProfessor: document.getElementById("nomeProfessor").value,
+            nomeAluno: document.getElementById("nomeAluno").value,
+            turma: document.getElementById("turma").value,
+            data: dataISO
+          })
+        });
+
+        mostrarMensagem("Liberação cadastrada com sucesso!");
+        e.target.reset();
+
+      } catch (erro) {
+        mostrarMensagem(erro.message, true);
+      }
+    });
+
+    // CONSULTAR E GERAR 5 SEEDS
+    async function buscar(tipo) {
+      tabelaAtual = tipo;
+
+      try {
+        mostrarMensagem("Gerando 5 registros de teste...");
+
+        await requisicao("/seed/" + tipo, {
+          method: "POST"
+        });
+
+        await carregarTabela(tipo);
+
+        mostrarMensagem("5 registros gerados e tabela carregada!");
+
+      } catch (erro) {
+        mostrarMensagem(erro.message, true);
+      }
+    }
+
+    // CARREGAR TABELA SEM GERAR NOVAS SEEDS
+    async function carregarTabela(tipo) {
+      try {
+        const registros = await requisicao("/" + tipo);
+        tabelaAtual = tipo;
+
+        const area = document.getElementById("areaTabela");
+
+        if (!registros.length) {
+          area.innerHTML = `
+            <p>Essa tabela está vazia.</p>
+            <button class="excluir-todos"
+              onclick="excluirTodos('${tipo}')">
+              Excluir todos
+            </button>
+          `;
+          return;
+        }
+
+        const colunas = Object.keys(registros[0]);
+
+        let html = `
+          <h3>Tabela: ${tipo}</h3>
+
+          <button class="excluir-todos"
+            onclick="excluirTodos('${tipo}')">
+            Excluir todos os registros
+          </button>
+
+          <div class="tabela-container">
+            <table>
+              <thead>
+                <tr>
+                  ${colunas.map(coluna => `<th>${coluna}</th>`).join("")}
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+        `;
+
+        registros.forEach(registro => {
+          html += "<tr>";
+
+          colunas.forEach(coluna => {
+            let valor = registro[coluna];
+
+            if (coluna === "data" && valor) {
+              valor = new Date(valor).toLocaleString("pt-BR");
+            }
+
+            html += `<td>${valor ?? ""}</td>`;
+          });
+
+          html += `
+            <td>
+              <button class="excluir"
+                onclick="excluir('${tipo}', ${registro.id})">
+                Excluir
+              </button>
+            </td>
+          `;
+
+          html += "</tr>";
+        });
+
+        html += `
+              </tbody>
+            </table>
+          </div>
+        `;
+
+        area.innerHTML = html;
+
+      } catch (erro) {
+        mostrarMensagem(erro.message, true);
+      }
+    }
+
+    // EXCLUIR UM REGISTRO
+    async function excluir(tipo, id) {
+      if (!confirm("Deseja realmente excluir este registro?")) {
+        return;
+      }
+
+      try {
+        await requisicao(`/${tipo}/${id}`, {
+          method: "DELETE"
+        });
+
+        mostrarMensagem("Registro excluído com sucesso!");
+
+        await carregarTabela(tipo);
+
+      } catch (erro) {
+        mostrarMensagem(erro.message, true);
+      }
+    }
+
+    // EXCLUIR TODOS OS REGISTROS
+    async function excluirTodos(tipo) {
+      if (!confirm("Tem certeza que deseja excluir TODOS os registros desta tabela?")) {
+        return;
+      }
+
+      try {
+        const resultado = await requisicao(`/${tipo}/todos`, {
+          method: "DELETE"
+        });
+
+        mostrarMensagem(
+          `${resultado.quantidade} registro(s) excluído(s)!`
+        );
+
+        await carregarTabela(tipo);
+
+      } catch (erro) {
+        mostrarMensagem(erro.message, true);
+      }
+    }
+  </script>
+</body>
+</html>
