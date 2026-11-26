@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relatórios - CESF</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="celular">
+  <img src="onda2.png" class="onda-topo-pequena">
+  <div class="conteudo">
+    <div class="topo"><img src="logo.png" class="logo-img-pequena"><div><h1>Relatórios</h1><p>Resumo das saídas da escola.</p></div></div>
+    <div class="filtros"><span class="ativo">Por data</span><span>Por turma</span><span>Por destino</span></div>
+    <table class="tabela">
+      <tr><th>Aluno</th><th>Turma</th><th>Destino</th><th>Hora</th><th>Status</th></tr>
+      <tr><td>Maria S.</td><td>2°A</td><td>Banheiro</td><td>10:15</td><td><span class="status fora">Fora</span></td></tr>
+      <tr><td>Pedro M.</td><td>1°B</td><td>Biblioteca</td><td>10:02</td><td><span class="status voltou">Voltou</span></td></tr>
+      <tr><td>Ana L.</td><td>2°A</td><td>Setor Ped.</td><td>09:50</td><td><span class="status voltou">Voltou</span></td></tr>
+      <tr><td>Lucas F.</td><td>3°A</td><td>Banheiro</td><td>09:30</td><td><span class="status voltou">Voltou</span></td></tr>
+    </table>
+    <div class="botoes"><a href="nova.html"  ="voltar">Voltar</a><button class="btn" style="padding:0 20px" onclick="alert('Relatório exportado!')">Exportar relatório</button></div>
+    <a href="lista.html" class="link-esqueceu" style="margin-top:20px">Ver Autorização de Saída →</a>
+  </div>
+</div>
+</body>
+</html>
