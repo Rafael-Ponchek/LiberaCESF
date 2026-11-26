@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { randomBytes } from "crypto";
 
 dotenv.config();
 
@@ -16,7 +17,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ==========================================
-// CONEXÃO COM SUPABASE
+// CONFIGURAÇÕES
 // ==========================================
 
 if (!process.env.DATABASE_URL) {
@@ -24,10 +25,16 @@ if (!process.env.DATABASE_URL) {
     process.exit(1);
 }
 
-if (!process.env.JWT_SECRET) {
-    console.error("ERRO: JWT_SECRET não configurada.");
-    process.exit(1);
-}
+// Chave JWT gerada automaticamente.
+// Todos os tokens serão válidos enquanto
+// esta instância do servidor utilizar a chave.
+const JWT_SECRET = randomBytes(64).toString("hex");
+
+console.log("Chave JWT gerada automaticamente.");
+
+// ==========================================
+// CONEXÃO COM SUPABASE - SESSION POOLER
+// ==========================================
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -39,8 +46,8 @@ const pool = new Pool({
     max: 10
 });
 
-pool.on("error", (err) => {
-    console.error("Erro inesperado no PostgreSQL:", err.message);
+pool.on("error", (erro) => {
+    console.error("Erro PostgreSQL:", erro.message);
 });
 
 async function consultar(sql, valores = []) {
@@ -57,12 +64,12 @@ const PERFIS = {
     PROFESSOR: "PROFESSOR"
 };
 
-function perfilValido(perfil) {
-    return Object.values(PERFIS).includes(perfil);
-}
+const ADMIN = PERFIS.ADMINISTRADOR;
+const INSPETOR = PERFIS.FUNCIONARIO;
+const PROFESSOR = PERFIS.PROFESSOR;
 
 // ==========================================
-// AUTENTICAÇÃO
+// AUTENTICAÇÃO JWT
 // ==========================================
 
 function gerarToken(usuario) {
@@ -73,7 +80,7 @@ function gerarToken(usuario) {
             email: usuario.email,
             perfil: usuario.perfil
         },
-        process.env.JWT_SECRET,
+        JWT_SECRET,
         {
             expiresIn: "8h"
         }
@@ -92,11 +99,11 @@ function autenticar(req, res, next) {
     const token = autorizacao.split(" ")[1];
 
     try {
-        req.usuario = jwt.verify(token, process.env.JWT_SECRET);
+        req.usuario = jwt.verify(token, JWT_SECRET);
         next();
     } catch {
         return res.status(401).json({
-            erro: "Token inválido ou expirado."
+            erro: "Token inválido ou expirado. Faça login novamente."
         });
     }
 }
@@ -113,10 +120,6 @@ function permitir(...perfis) {
     };
 }
 
-const ADMIN = PERFIS.ADMINISTRADOR;
-const INSPETOR = PERFIS.FUNCIONARIO;
-const PROFESSOR = PERFIS.PROFESSOR;
-
 // ==========================================
 // ROTA INICIAL
 // ==========================================
@@ -131,7 +134,7 @@ app.get("/", (req, res) => {
 });
 
 // ==========================================
-// VERIFICAR CONEXÃO
+// STATUS DO BANCO
 // ==========================================
 
 app.get("/api/status", async (req, res) => {
@@ -145,6 +148,7 @@ app.get("/api/status", async (req, res) => {
             banco: "Supabase",
             horario: resultado.rows[0].horario
         });
+
     } catch (erro) {
         console.error(erro);
 
@@ -195,11 +199,10 @@ app.post("/api/login", async (req, res) => {
             });
         }
 
-        // Verifica se o perfil escolhido na tela
-        // corresponde ao perfil cadastrado.
-
         if (perfil) {
-            const perfilEscolhido = PERFIS[perfil.toUpperCase()];
+            const perfilEscolhido = PERFIS[
+                String(perfil).toUpperCase()
+            ];
 
             if (!perfilEscolhido || perfilEscolhido !== usuario.perfil) {
                 return res.status(403).json({
@@ -299,7 +302,7 @@ app.get(
             const turmaId = req.query.turma_id;
 
             const valores = [];
-            let condicoes = [];
+            const condicoes = [];
 
             if (busca) {
                 valores.push(`%${busca}%`);
@@ -311,6 +314,12 @@ app.get(
             }
 
             if (turmaId) {
+                if (!/^\d+$/.test(String(turmaId))) {
+                    return res.status(400).json({
+                        erro: "ID da turma inválido."
+                    });
+                }
+
                 valores.push(turmaId);
 
                 condicoes.push(
@@ -372,6 +381,12 @@ app.post(
                 });
             }
 
+            if (!/^\d+$/.test(String(aluno_id))) {
+                return res.status(400).json({
+                    erro: "ID do aluno inválido."
+                });
+            }
+
             const destinosPermitidos = [
                 "Banheiro",
                 "Biblioteca",
@@ -385,8 +400,6 @@ app.post(
                 });
             }
 
-            // Confere se o aluno existe.
-
             const aluno = await consultar(
                 "SELECT id FROM alunos WHERE id = $1",
                 [aluno_id]
@@ -395,22 +408,6 @@ app.post(
             if (aluno.rows.length === 0) {
                 return res.status(404).json({
                     erro: "Aluno não encontrado."
-                });
-            }
-
-            // O professor vem do token autenticado.
-            // Não aceitamos professor_id enviado pelo frontend.
-
-            const professor = await consultar(
-                `SELECT id
-                 FROM usuarios
-                 WHERE id = $1 AND perfil = $2`,
-                [req.usuario.id, PROFESSOR]
-            );
-
-            if (professor.rows.length === 0) {
-                return res.status(403).json({
-                    erro: "Professor não encontrado."
                 });
             }
 
@@ -437,6 +434,7 @@ app.post(
                         horario_saida
                     ]
                 );
+
             } else {
                 resultado = await consultar(
                     `INSERT INTO autorizacoes
@@ -486,7 +484,6 @@ app.get(
             const valores = [];
             const condicoes = [];
 
-            // Professor visualiza somente suas autorizações.
             if (req.usuario.perfil === PROFESSOR) {
                 valores.push(req.usuario.id);
 
@@ -500,20 +497,20 @@ app.get(
 
                 condicoes.push(
                     `(a.nome ILIKE $${valores.length}
-                    OR a.matricula ILIKE $${valores.length}
-                    OR p.nome ILIKE $${valores.length}
-                    OR t.nome ILIKE $${valores.length})`
+                     OR a.matricula ILIKE $${valores.length}
+                     OR p.nome ILIKE $${valores.length}
+                     OR t.nome ILIKE $${valores.length})`
                 );
             }
 
             if (status) {
-                const statusPermitidos = [
+                const permitidos = [
                     "ATIVA",
                     "CONCLUIDA",
                     "EXPIRADA"
                 ];
 
-                if (!statusPermitidos.includes(status)) {
+                if (!permitidos.includes(status)) {
                     return res.status(400).json({
                         erro: "Status inválido."
                     });
@@ -606,6 +603,7 @@ app.get(
 
             if (req.usuario.perfil === PROFESSOR) {
                 valores.push(req.usuario.id);
+
                 filtroProfessor = "AND au.professor_id = $2";
             }
 
@@ -644,7 +642,7 @@ app.get(
 );
 
 // ==========================================
-// REGISTRAR RETORNO DO ALUNO
+// REGISTRAR RETORNO
 // ==========================================
 
 app.patch(
@@ -812,24 +810,19 @@ app.post("/api/recuperar-senha", async (req, res) => {
             });
         }
 
-        // Resposta genérica para não revelar
-        // se determinado e-mail está cadastrado.
-
         const resultado = await consultar(
             `SELECT id FROM usuarios
              WHERE LOWER(email) = LOWER($1)`,
             [email.trim()]
         );
 
-        if (resultado.rows.length > 0) {
-            console.log(
-                "Solicitação de recuperação para um usuário cadastrado."
-            );
-        }
+        // Não revela se o e-mail existe.
+        // O envio de e-mail deverá ser integrado
+        // a um serviço de recuperação.
 
         res.json({
             sucesso: true,
-            mensagem: "Se o e-mail estiver cadastrado, ele poderá receber instruções de recuperação."
+            mensagem: "Se o e-mail estiver cadastrado, poderá receber instruções de recuperação."
         });
 
     } catch (erro) {
@@ -842,7 +835,7 @@ app.post("/api/recuperar-senha", async (req, res) => {
 });
 
 // ==========================================
-// TRATAMENTO DE ROTAS INEXISTENTES
+// ROTA NÃO ENCONTRADA
 // ==========================================
 
 app.use((req, res) => {
@@ -853,7 +846,7 @@ app.use((req, res) => {
 });
 
 // ==========================================
-// INICIALIZAÇÃO
+// INICIAR SERVIDOR
 // ==========================================
 
 const PORT = process.env.PORT || 3000;
@@ -864,5 +857,6 @@ app.listen(PORT, () => {
     console.log("----------------------------------");
     console.log(`Porta: ${PORT}`);
     console.log("Banco: Supabase PostgreSQL");
+    console.log("Autenticação: JWT");
     console.log("----------------------------------");
 });
