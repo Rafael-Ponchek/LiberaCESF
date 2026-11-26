@@ -5,36 +5,46 @@ import dotenv from "dotenv";
 import pg from "pg";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { randomBytes } from "crypto";
 
 dotenv.config();
 
-const app = express();
 const { Pool } = pg;
+const app = express();
 
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ==========================================
-// CONFIGURAÇÕES
-// ==========================================
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!process.env.DATABASE_URL) {
-    console.error("ERRO: DATABASE_URL não configurada.");
-    process.exit(1);
+    throw new Error("DATABASE_URL não configurada no .env");
 }
 
-// Chave JWT gerada automaticamente.
-// Todos os tokens serão válidos enquanto
-// esta instância do servidor utilizar a chave.
-const JWT_SECRET = randomBytes(64).toString("hex");
+if (!JWT_SECRET || JWT_SECRET.length < 32) {
+    throw new Error("Configure uma JWT_SECRET com pelo menos 32 caracteres.");
+}
 
-console.log("Chave JWT gerada automaticamente.");
+// ======================================
+// CONFIGURAÇÕES
+// ======================================
 
-// ==========================================
-// CONEXÃO COM SUPABASE - SESSION POOLER
-// ==========================================
+const origensPermitidas = [
+    process.env.FRONTEND_URL,
+    "http://localhost:3000",
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:5173"
+].filter(Boolean);
+
+app.use(cors({
+    origin(origem, callback) {
+        if (!origem || origensPermitidas.includes(origem)) {
+            return callback(null, true);
+        }
+
+        return callback(new Error("Origem não permitida pelo CORS."));
+    }
+}));
+
+app.use(express.json({ limit: "1mb" }));
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -46,31 +56,36 @@ const pool = new Pool({
     max: 10
 });
 
-pool.on("error", (erro) => {
-    console.error("Erro PostgreSQL:", erro.message);
-});
-
-async function consultar(sql, valores = []) {
-    return pool.query(sql, valores);
-}
-
-// ==========================================
-// PERFIS
-// ==========================================
+const DESTINOS_VALIDOS = [
+    "Banheiro",
+    "Biblioteca",
+    "Setor Pedagogico",
+    "Outro"
+];
 
 const PERFIS = {
     ADMINISTRADOR: "ADIMINISTRAÇÃO",
+    ADMINISTRACAO: "ADIMINISTRAÇÃO",
     FUNCIONARIO: "INSPETOR",
+    INSPETOR: "INSPETOR",
     PROFESSOR: "PROFESSOR"
 };
 
-const ADMIN = PERFIS.ADMINISTRADOR;
-const INSPETOR = PERFIS.FUNCIONARIO;
-const PROFESSOR = PERFIS.PROFESSOR;
+// ======================================
+// FUNÇÕES AUXILIARES
+// ======================================
 
-// ==========================================
-// AUTENTICAÇÃO JWT
-// ==========================================
+function normalizarTexto(valor) {
+    return String(valor || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toUpperCase();
+}
+
+function normalizarPerfil(perfil) {
+    return PERFIS[normalizarTexto(perfil)] || null;
+}
 
 function gerarToken(usuario) {
     return jwt.sign(
@@ -88,31 +103,31 @@ function gerarToken(usuario) {
 }
 
 function autenticar(req, res, next) {
-    const autorizacao = req.headers.authorization;
+    const cabecalho = req.headers.authorization;
 
-    if (!autorizacao || !autorizacao.startsWith("Bearer ")) {
+    if (!cabecalho || !cabecalho.startsWith("Bearer ")) {
         return res.status(401).json({
             erro: "Token não informado."
         });
     }
 
-    const token = autorizacao.split(" ")[1];
+    const token = cabecalho.split(" ")[1];
 
     try {
         req.usuario = jwt.verify(token, JWT_SECRET);
         next();
     } catch {
         return res.status(401).json({
-            erro: "Token inválido ou expirado. Faça login novamente."
+            erro: "Token inválido ou expirado."
         });
     }
 }
 
-function permitir(...perfis) {
+function permitirPerfis(...perfis) {
     return (req, res, next) => {
-        if (!req.usuario || !perfis.includes(req.usuario.perfil)) {
+        if (!perfis.includes(req.usuario.perfil)) {
             return res.status(403).json({
-                erro: "Você não tem permissão para realizar esta operação."
+                erro: "Você não possui permissão para acessar esta função."
             });
         }
 
@@ -120,48 +135,64 @@ function permitir(...perfis) {
     };
 }
 
-// ==========================================
-// ROTA INICIAL
-// ==========================================
+function erroBanco(res, erro) {
+    console.error("Erro no banco:", erro.message);
+
+    if (erro.code === "23503") {
+        return res.status(400).json({
+            erro: "Registro relacionado não encontrado."
+        });
+    }
+
+    if (erro.code === "23505") {
+        return res.status(409).json({
+            erro: "Este registro já existe."
+        });
+    }
+
+    if (erro.code === "23514") {
+        return res.status(400).json({
+            erro: "Os dados não respeitam as regras do banco."
+        });
+    }
+
+    return res.status(500).json({
+        erro: "Erro interno no servidor."
+    });
+}
+
+// ======================================
+// ROTAS PÚBLICAS
+// ======================================
 
 app.get("/", (req, res) => {
     res.json({
-        sistema: "AUTORIZA CESF",
-        mensagem: "API funcionando!",
-        banco: "Supabase PostgreSQL",
-        versao: "1.0.0"
+        mensagem: "API LiberaCESF funcionando!",
+        status: "online"
     });
 });
 
-// ==========================================
-// STATUS DO BANCO
-// ==========================================
-
 app.get("/api/status", async (req, res) => {
     try {
-        const resultado = await consultar(
-            "SELECT NOW() AS horario"
-        );
+        await pool.query("SELECT NOW()");
 
         res.json({
-            conectado: true,
-            banco: "Supabase",
-            horario: resultado.rows[0].horario
+            servidor: "online",
+            banco: "conectado"
         });
-
     } catch (erro) {
-        console.error(erro);
+        console.error(erro.message);
 
-        res.status(500).json({
-            conectado: false,
-            erro: "Não foi possível conectar ao banco."
+        res.status(503).json({
+            servidor: "online",
+            banco: "desconectado"
         });
     }
 });
 
-// ==========================================
+// ======================================
 // LOGIN
-// ==========================================
+// ======================================
 
 app.post("/api/login", async (req, res) => {
     try {
@@ -173,11 +204,11 @@ app.post("/api/login", async (req, res) => {
             });
         }
 
-        const resultado = await consultar(
+        const resultado = await pool.query(
             `SELECT id, nome, email, senha, perfil
              FROM usuarios
              WHERE LOWER(email) = LOWER($1)`,
-            [email.trim()]
+            [String(email).trim()]
         );
 
         if (resultado.rows.length === 0) {
@@ -200,11 +231,9 @@ app.post("/api/login", async (req, res) => {
         }
 
         if (perfil) {
-            const perfilEscolhido = PERFIS[
-                String(perfil).toUpperCase()
-            ];
+            const perfilSolicitado = normalizarPerfil(perfil);
 
-            if (!perfilEscolhido || perfilEscolhido !== usuario.perfil) {
+            if (!perfilSolicitado || perfilSolicitado !== usuario.perfil) {
                 return res.status(403).json({
                     erro: "Este usuário não pertence ao perfil selecionado."
                 });
@@ -214,8 +243,7 @@ app.post("/api/login", async (req, res) => {
         const token = gerarToken(usuario);
 
         res.json({
-            sucesso: true,
-            mensagem: "Login realizado com sucesso!",
+            mensagem: "Login realizado com sucesso.",
             token,
             usuario: {
                 id: usuario.id,
@@ -226,401 +254,226 @@ app.post("/api/login", async (req, res) => {
         });
 
     } catch (erro) {
-        console.error("Erro no login:", erro);
-
-        res.status(500).json({
-            erro: "Erro ao realizar login."
-        });
+        erroBanco(res, erro);
     }
 });
 
-// ==========================================
-// CONSULTAR USUÁRIOS
-// ==========================================
+// ======================================
+// USUÁRIOS
+// ======================================
 
 app.get(
     "/api/usuarios",
     autenticar,
-    permitir(ADMIN),
+    permitirPerfis("ADIMINISTRAÇÃO"),
     async (req, res) => {
         try {
-            const resultado = await consultar(
+            const resultado = await pool.query(
                 `SELECT id, nome, email, perfil
                  FROM usuarios
                  ORDER BY nome`
             );
 
             res.json(resultado.rows);
-
         } catch (erro) {
-            console.error(erro);
-
-            res.status(500).json({
-                erro: "Erro ao consultar usuários."
-            });
+            erroBanco(res, erro);
         }
     }
 );
 
-// ==========================================
-// LISTAR TURMAS
-// ==========================================
+// ======================================
+// TURMAS
+// ======================================
 
-app.get(
-    "/api/turmas",
-    autenticar,
-    async (req, res) => {
-        try {
-            const resultado = await consultar(
-                `SELECT id, nome
-                 FROM turmas
-                 ORDER BY nome`
-            );
+app.get("/api/turmas", autenticar, async (req, res) => {
+    try {
+        const resultado = await pool.query(
+            `SELECT id, nome
+             FROM turmas
+             ORDER BY nome`
+        );
 
-            res.json(resultado.rows);
-
-        } catch (erro) {
-            console.error(erro);
-
-            res.status(500).json({
-                erro: "Erro ao consultar turmas."
-            });
-        }
+        res.json(resultado.rows);
+    } catch (erro) {
+        erroBanco(res, erro);
     }
-);
+});
 
-// ==========================================
-// PESQUISAR ALUNOS
-// ==========================================
+// ======================================
+// ALUNOS
+// ======================================
 
-app.get(
-    "/api/alunos",
-    autenticar,
-    async (req, res) => {
-        try {
-            const busca = (req.query.busca || "").trim();
-            const turmaId = req.query.turma_id;
+app.get("/api/alunos", autenticar, async (req, res) => {
+    try {
+        const busca = String(req.query.busca || "").trim();
+        const turmaId = req.query.turma_id;
 
-            const valores = [];
-            const condicoes = [];
+        const resultado = await pool.query(
+            `SELECT
+                a.id,
+                a.nome,
+                a.matricula,
+                a.turma_id,
+                t.nome AS turma
+             FROM alunos a
+             INNER JOIN turmas t ON t.id = a.turma_id
+             WHERE (
+                $1 = ''
+                OR a.nome ILIKE '%' || $1 || '%'
+                OR a.matricula ILIKE '%' || $1 || '%'
+             )
+             AND (
+                $2::INTEGER IS NULL
+                OR a.turma_id = $2
+             )
+             ORDER BY a.nome
+             LIMIT 100`,
+            [
+                busca,
+                turmaId ? Number(turmaId) : null
+            ]
+        );
 
-            if (busca) {
-                valores.push(`%${busca}%`);
-
-                condicoes.push(
-                    `(a.nome ILIKE $${valores.length}
-                     OR a.matricula ILIKE $${valores.length})`
-                );
-            }
-
-            if (turmaId) {
-                if (!/^\d+$/.test(String(turmaId))) {
-                    return res.status(400).json({
-                        erro: "ID da turma inválido."
-                    });
-                }
-
-                valores.push(turmaId);
-
-                condicoes.push(
-                    `a.turma_id = $${valores.length}`
-                );
-            }
-
-            const where = condicoes.length
-                ? `WHERE ${condicoes.join(" AND ")}`
-                : "";
-
-            const resultado = await consultar(
-                `SELECT
-                    a.id,
-                    a.nome,
-                    a.matricula,
-                    t.id AS turma_id,
-                    t.nome AS turma
-                 FROM alunos a
-                 INNER JOIN turmas t
-                    ON t.id = a.turma_id
-                 ${where}
-                 ORDER BY a.nome
-                 LIMIT 100`,
-                valores
-            );
-
-            res.json(resultado.rows);
-
-        } catch (erro) {
-            console.error(erro);
-
-            res.status(500).json({
-                erro: "Erro ao pesquisar alunos."
-            });
-        }
+        res.json(resultado.rows);
+    } catch (erro) {
+        erroBanco(res, erro);
     }
-);
+});
 
-// ==========================================
+// ======================================
 // CRIAR AUTORIZAÇÃO
-// ==========================================
+// ======================================
 
 app.post(
     "/api/autorizacoes",
     autenticar,
-    permitir(PROFESSOR),
+    permitirPerfis("PROFESSOR"),
     async (req, res) => {
         try {
-            const {
-                aluno_id,
-                destino,
-                horario_saida
-            } = req.body;
+            const { aluno_id, destino } = req.body;
 
-            if (!aluno_id || !destino) {
+            const alunoId = Number(aluno_id);
+
+            if (!Number.isInteger(alunoId) || alunoId <= 0) {
                 return res.status(400).json({
-                    erro: "Informe o aluno e o destino."
+                    erro: "Informe um aluno válido."
                 });
             }
 
-            if (!/^\d+$/.test(String(aluno_id))) {
-                return res.status(400).json({
-                    erro: "ID do aluno inválido."
-                });
-            }
-
-            const destinosPermitidos = [
-                "Banheiro",
-                "Biblioteca",
-                "Setor Pedagogico",
-                "Outro"
-            ];
-
-            if (!destinosPermitidos.includes(destino)) {
+            if (!DESTINOS_VALIDOS.includes(destino)) {
                 return res.status(400).json({
                     erro: "Destino inválido."
                 });
             }
 
-            const aluno = await consultar(
-                "SELECT id FROM alunos WHERE id = $1",
-                [aluno_id]
+            const resultado = await pool.query(
+                `INSERT INTO autorizacoes
+                    (aluno_id, professor_id, destino, status)
+                 VALUES ($1, $2, $3, 'ATIVA')
+                 RETURNING *`,
+                [
+                    alunoId,
+                    req.usuario.id,
+                    destino
+                ]
             );
 
-            if (aluno.rows.length === 0) {
-                return res.status(404).json({
-                    erro: "Aluno não encontrado."
-                });
-            }
-
-            let resultado;
-
-            if (horario_saida) {
-                const data = new Date(horario_saida);
-
-                if (Number.isNaN(data.getTime())) {
-                    return res.status(400).json({
-                        erro: "Data e horário inválidos."
-                    });
-                }
-
-                resultado = await consultar(
-                    `INSERT INTO autorizacoes
-                        (aluno_id, professor_id, destino, horario_saida)
-                     VALUES ($1, $2, $3, $4)
-                     RETURNING *`,
-                    [
-                        aluno_id,
-                        req.usuario.id,
-                        destino,
-                        horario_saida
-                    ]
-                );
-
-            } else {
-                resultado = await consultar(
-                    `INSERT INTO autorizacoes
-                        (aluno_id, professor_id, destino)
-                     VALUES ($1, $2, $3)
-                     RETURNING *`,
-                    [
-                        aluno_id,
-                        req.usuario.id,
-                        destino
-                    ]
-                );
-            }
-
             res.status(201).json({
-                sucesso: true,
-                mensagem: "Autorização emitida com sucesso!",
+                mensagem: "Autorização criada com sucesso.",
                 autorizacao: resultado.rows[0]
             });
 
         } catch (erro) {
-            console.error("Erro ao criar autorização:", erro);
-
-            res.status(500).json({
-                erro: "Não foi possível criar a autorização."
-            });
+            erroBanco(res, erro);
         }
     }
 );
 
-// ==========================================
+// ======================================
 // LISTAR AUTORIZAÇÕES
-// ==========================================
+// ======================================
 
 app.get(
     "/api/autorizacoes",
     autenticar,
     async (req, res) => {
         try {
-            const {
-                busca,
-                status,
-                data_inicio,
-                data_fim
-            } = req.query;
+            const { status, turma_id } = req.query;
 
-            const valores = [];
-            const condicoes = [];
-
-            if (req.usuario.perfil === PROFESSOR) {
-                valores.push(req.usuario.id);
-
-                condicoes.push(
-                    `au.professor_id = $${valores.length}`
-                );
-            }
-
-            if (busca) {
-                valores.push(`%${busca}%`);
-
-                condicoes.push(
-                    `(a.nome ILIKE $${valores.length}
-                     OR a.matricula ILIKE $${valores.length}
-                     OR p.nome ILIKE $${valores.length}
-                     OR t.nome ILIKE $${valores.length})`
-                );
-            }
-
-            if (status) {
-                const permitidos = [
-                    "ATIVA",
-                    "CONCLUIDA",
-                    "EXPIRADA"
-                ];
-
-                if (!permitidos.includes(status)) {
-                    return res.status(400).json({
-                        erro: "Status inválido."
-                    });
-                }
-
-                valores.push(status);
-
-                condicoes.push(
-                    `au.status = $${valores.length}`
-                );
-            }
-
-            if (data_inicio) {
-                valores.push(data_inicio);
-
-                condicoes.push(
-                    `au.horario_saida >= $${valores.length}::date`
-                );
-            }
-
-            if (data_fim) {
-                valores.push(data_fim);
-
-                condicoes.push(
-                    `au.horario_saida < ($${valores.length}::date + INTERVAL '1 day')`
-                );
-            }
-
-            const where = condicoes.length
-                ? `WHERE ${condicoes.join(" AND ")}`
-                : "";
-
-            const resultado = await consultar(
+            const resultado = await pool.query(
                 `SELECT
                     au.id,
+                    au.aluno_id,
+                    au.professor_id,
                     au.destino,
                     au.horario_saida,
                     au.horario_retorno,
                     au.status,
-                    a.id AS aluno_id,
-                    a.nome AS aluno,
-                    a.matricula,
+                    al.nome AS aluno,
+                    al.matricula,
                     t.nome AS turma,
-                    p.id AS professor_id,
-                    p.nome AS professor
+                    u.nome AS professor
                  FROM autorizacoes au
-                 INNER JOIN alunos a
-                    ON a.id = au.aluno_id
-                 INNER JOIN turmas t
-                    ON t.id = a.turma_id
-                 INNER JOIN usuarios p
-                    ON p.id = au.professor_id
-                 ${where}
-                 ORDER BY au.horario_saida DESC
-                 LIMIT 500`,
-                valores
+                 INNER JOIN alunos al ON al.id = au.aluno_id
+                 INNER JOIN turmas t ON t.id = al.turma_id
+                 INNER JOIN usuarios u ON u.id = au.professor_id
+                 WHERE
+                    ($1::VARCHAR IS NULL OR au.status = $1)
+                    AND
+                    ($2::INTEGER IS NULL OR al.turma_id = $2)
+                    AND
+                    (
+                        $3::INTEGER IS NULL
+                        OR au.professor_id = $3
+                    )
+                 ORDER BY au.horario_saida DESC`,
+                [
+                    status || null,
+                    turma_id ? Number(turma_id) : null,
+                    req.usuario.perfil === "PROFESSOR"
+                        ? req.usuario.id
+                        : null
+                ]
             );
 
             res.json(resultado.rows);
 
         } catch (erro) {
-            console.error("Erro ao listar autorizações:", erro);
-
-            res.status(500).json({
-                erro: "Erro ao consultar autorizações."
-            });
+            erroBanco(res, erro);
         }
     }
 );
 
-// ==========================================
-// CONSULTAR AUTORIZAÇÃO POR ID
-// ==========================================
+// ======================================
+// CONSULTAR UMA AUTORIZAÇÃO
+// ======================================
 
 app.get(
     "/api/autorizacoes/:id",
     autenticar,
     async (req, res) => {
         try {
-            const { id } = req.params;
+            const id = Number(req.params.id);
 
-            if (!/^\d+$/.test(id)) {
+            if (!Number.isInteger(id) || id <= 0) {
                 return res.status(400).json({
                     erro: "ID inválido."
                 });
             }
 
-            const valores = [id];
-            let filtroProfessor = "";
-
-            if (req.usuario.perfil === PROFESSOR) {
-                valores.push(req.usuario.id);
-
-                filtroProfessor = "AND au.professor_id = $2";
-            }
-
-            const resultado = await consultar(
+            const resultado = await pool.query(
                 `SELECT
                     au.*,
-                    a.nome AS aluno,
-                    a.matricula,
+                    al.nome AS aluno,
+                    al.matricula,
                     t.nome AS turma,
-                    p.nome AS professor
+                    u.nome AS professor
                  FROM autorizacoes au
-                 INNER JOIN alunos a ON a.id = au.aluno_id
-                 INNER JOIN turmas t ON t.id = a.turma_id
-                 INNER JOIN usuarios p ON p.id = au.professor_id
-                 WHERE au.id = $1
-                 ${filtroProfessor}`,
-                valores
+                 INNER JOIN alunos al ON al.id = au.aluno_id
+                 INNER JOIN turmas t ON t.id = al.turma_id
+                 INNER JOIN usuarios u ON u.id = au.professor_id
+                 WHERE au.id = $1`,
+                [id]
             );
 
             if (resultado.rows.length === 0) {
@@ -629,234 +482,186 @@ app.get(
                 });
             }
 
-            res.json(resultado.rows[0]);
+            const autorizacao = resultado.rows[0];
+
+            if (
+                req.usuario.perfil === "PROFESSOR" &&
+                autorizacao.professor_id !== req.usuario.id
+            ) {
+                return res.status(403).json({
+                    erro: "Você não pode consultar esta autorização."
+                });
+            }
+
+            res.json(autorizacao);
 
         } catch (erro) {
-            console.error(erro);
-
-            res.status(500).json({
-                erro: "Erro ao consultar autorização."
-            });
+            erroBanco(res, erro);
         }
     }
 );
 
-// ==========================================
-// REGISTRAR RETORNO
-// ==========================================
+// ======================================
+// CONCLUIR AUTORIZAÇÃO
+// ======================================
 
 app.patch(
     "/api/autorizacoes/:id/retorno",
     autenticar,
-    permitir(ADMIN, INSPETOR, PROFESSOR),
+    permitirPerfis(
+        "INSPETOR",
+        "ADIMINISTRAÇÃO",
+        "PROFESSOR"
+    ),
     async (req, res) => {
         try {
-            const { id } = req.params;
+            const id = Number(req.params.id);
 
-            if (!/^\d+$/.test(id)) {
+            if (!Number.isInteger(id) || id <= 0) {
                 return res.status(400).json({
                     erro: "ID inválido."
                 });
             }
 
-            const valores = [id];
-            let filtroProfessor = "";
-
-            if (req.usuario.perfil === PROFESSOR) {
-                valores.push(req.usuario.id);
-
-                filtroProfessor =
-                    `AND professor_id = $${valores.length}`;
-            }
-
-            const resultado = await consultar(
+            const resultado = await pool.query(
                 `UPDATE autorizacoes
-                 SET
-                    horario_retorno = CURRENT_TIMESTAMP,
-                    status = 'CONCLUIDA'
+                 SET horario_retorno = CURRENT_TIMESTAMP,
+                     status = 'CONCLUIDA'
                  WHERE id = $1
                    AND status = 'ATIVA'
-                   ${filtroProfessor}
+                   AND (
+                        $2::INTEGER IS NULL
+                        OR professor_id = $2
+                   )
                  RETURNING *`,
-                valores
+                [
+                    id,
+                    req.usuario.perfil === "PROFESSOR"
+                        ? req.usuario.id
+                        : null
+                ]
             );
 
-            if (resultado.rows.length === 0) {
+            if (resultado.rowCount === 0) {
                 return res.status(404).json({
                     erro: "Autorização não encontrada, já concluída ou sem permissão."
                 });
             }
 
             res.json({
-                sucesso: true,
-                mensagem: "Retorno registrado com sucesso!",
+                mensagem: "Autorização concluída com sucesso.",
                 autorizacao: resultado.rows[0]
             });
 
         } catch (erro) {
-            console.error(erro);
-
-            res.status(500).json({
-                erro: "Erro ao registrar retorno."
-            });
+            erroBanco(res, erro);
         }
     }
 );
 
-// ==========================================
+// ======================================
 // RELATÓRIOS
-// ==========================================
+// ======================================
 
 app.get(
     "/api/relatorios",
     autenticar,
-    permitir(ADMIN, INSPETOR, PROFESSOR),
+    permitirPerfis("INSPETOR", "ADIMINISTRAÇÃO"),
     async (req, res) => {
         try {
-            const { data_inicio, data_fim } = req.query;
-
-            const valores = [];
-            const condicoes = [];
-
-            if (req.usuario.perfil === PROFESSOR) {
-                valores.push(req.usuario.id);
-
-                condicoes.push(
-                    `au.professor_id = $${valores.length}`
-                );
-            }
-
-            if (data_inicio) {
-                valores.push(data_inicio);
-
-                condicoes.push(
-                    `au.horario_saida >= $${valores.length}::date`
-                );
-            }
-
-            if (data_fim) {
-                valores.push(data_fim);
-
-                condicoes.push(
-                    `au.horario_saida < ($${valores.length}::date + INTERVAL '1 day')`
-                );
-            }
-
-            const where = condicoes.length
-                ? `WHERE ${condicoes.join(" AND ")}`
-                : "";
-
-            const resultado = await consultar(
+            const resumo = await pool.query(
                 `SELECT
-                    au.id,
-                    a.nome AS aluno,
-                    a.matricula,
-                    t.nome AS turma,
-                    p.nome AS professor,
-                    au.destino,
-                    au.horario_saida,
-                    au.horario_retorno,
-                    au.status
-                 FROM autorizacoes au
-                 INNER JOIN alunos a ON a.id = au.aluno_id
-                 INNER JOIN turmas t ON t.id = a.turma_id
-                 INNER JOIN usuarios p ON p.id = au.professor_id
-                 ${where}
-                 ORDER BY au.horario_saida DESC`,
-                valores
+                    COUNT(*)::INTEGER AS total,
+                    COUNT(*) FILTER (WHERE status = 'ATIVA')::INTEGER AS ativas,
+                    COUNT(*) FILTER (WHERE status = 'CONCLUIDA')::INTEGER AS concluidas,
+                    COUNT(*) FILTER (WHERE status = 'EXPIRADA')::INTEGER AS expiradas
+                 FROM autorizacoes`
             );
 
-            const registros = resultado.rows;
+            const destinos = await pool.query(
+                `SELECT
+                    destino,
+                    COUNT(*)::INTEGER AS quantidade
+                 FROM autorizacoes
+                 GROUP BY destino
+                 ORDER BY quantidade DESC`
+            );
 
-            const resumo = {
-                total: registros.length,
-                ativas: registros.filter(
-                    item => item.status === "ATIVA"
-                ).length,
-                concluidas: registros.filter(
-                    item => item.status === "CONCLUIDA"
-                ).length,
-                expiradas: registros.filter(
-                    item => item.status === "EXPIRADA"
-                ).length
-            };
+            const porTurma = await pool.query(
+                `SELECT
+                    t.nome AS turma,
+                    COUNT(au.id)::INTEGER AS quantidade
+                 FROM turmas t
+                 LEFT JOIN alunos al ON al.turma_id = t.id
+                 LEFT JOIN autorizacoes au ON au.aluno_id = al.id
+                 GROUP BY t.id, t.nome
+                 ORDER BY t.nome`
+            );
 
             res.json({
-                resumo,
-                registros
+                resumo: resumo.rows[0],
+                destinos: destinos.rows,
+                turmas: porTurma.rows
             });
 
         } catch (erro) {
-            console.error("Erro nos relatórios:", erro);
-
-            res.status(500).json({
-                erro: "Não foi possível gerar os relatórios."
-            });
+            erroBanco(res, erro);
         }
     }
 );
 
-// ==========================================
+// ======================================
 // RECUPERAÇÃO DE SENHA
-// ==========================================
+// ======================================
 
-app.post("/api/recuperar-senha", async (req, res) => {
-    try {
-        const { email } = req.body;
-
-        if (!email) {
-            return res.status(400).json({
-                erro: "Informe seu e-mail."
-            });
-        }
-
-        const resultado = await consultar(
-            `SELECT id FROM usuarios
-             WHERE LOWER(email) = LOWER($1)`,
-            [email.trim()]
-        );
-
-        // Não revela se o e-mail existe.
-        // O envio de e-mail deverá ser integrado
-        // a um serviço de recuperação.
-
-        res.json({
-            sucesso: true,
-            mensagem: "Se o e-mail estiver cadastrado, poderá receber instruções de recuperação."
-        });
-
-    } catch (erro) {
-        console.error(erro);
-
-        res.status(500).json({
-            erro: "Erro ao solicitar recuperação."
-        });
-    }
-});
-
-// ==========================================
-// ROTA NÃO ENCONTRADA
-// ==========================================
-
-app.use((req, res) => {
-    res.status(404).json({
-        erro: "Rota não encontrada.",
-        rota: req.originalUrl
+app.post("/api/recuperar-senha", (req, res) => {
+    res.status(501).json({
+        erro: "Recuperação de senha ainda não configurada.",
+        mensagem: "Esta funcionalidade precisa de integração com um serviço de e-mail."
     });
 });
 
-// ==========================================
-// INICIAR SERVIDOR
-// ==========================================
+// ======================================
+// TRATAMENTO DE ERROS
+// ======================================
 
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, () => {
-    console.log("----------------------------------");
-    console.log(" AUTORIZA CESF - SERVIDOR ONLINE");
-    console.log("----------------------------------");
-    console.log(`Porta: ${PORT}`);
-    console.log("Banco: Supabase PostgreSQL");
-    console.log("Autenticação: JWT");
-    console.log("----------------------------------");
+app.use((req, res) => {
+    res.status(404).json({
+        erro: "Rota não encontrada."
+    });
 });
+
+app.use((erro, req, res, next) => {
+    console.error("Erro:", erro.message);
+
+    if (erro.message === "Origem não permitida pelo CORS.") {
+        return res.status(403).json({
+            erro: erro.message
+        });
+    }
+
+    res.status(500).json({
+        erro: "Erro interno no servidor."
+    });
+});
+
+// ======================================
+// INICIAR SERVIDOR
+// ======================================
+
+async function iniciarServidor() {
+    try {
+        await pool.query("SELECT NOW()");
+        console.log("Supabase conectado com sucesso!");
+
+        app.listen(PORT, () => {
+            console.log(`LiberaCESF rodando na porta ${PORT}`);
+        });
+    } catch (erro) {
+        console.error("Não foi possível conectar ao Supabase:");
+        console.error(erro.message);
+        process.exit(1);
+    }
+}
+
+iniciarServidor();
