@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Autoriza CESF</title>
+
+    <link rel="stylesheet" href="style.css">
+    
+</head>
+
+<body>
+
+    <main class="celular">
+
+        <!-- Onda superior -->
+        <img src="IMAGENS/onda2.png"
+             class="onda onda-topo"
+             alt="">
+
+        <!-- Conteúdo principal -->
+        <section class="conteudo">
+
+            <!-- Logo -->
+            <img src="IMAGENS/logo.png"
+                 class="logo"
+                 alt="Logo Autoriza CESF">
+
+            <!-- Título -->
+            <h1>Seja bem-vindo!</h1>
+
+            <p class="subtitulo">
+                Selecione seu perfil para continuar:
+            </p>
+
+            <!-- Botões de perfil -->
+            <div class="perfis">
+
+                <button class="botao-perfil" data-perfil="Administrador">
+
+                    <svg viewBox="0 0 40 40" aria-hidden="true">
+                        <circle cx="20" cy="11" r="7"/>
+                        <path d="M7 34 V29 C7 23 12 20 20 20 C28 20 33 23 33 29 V34"/>
+                    </svg>
+
+                    <span>Administrador</span>
+
+                </button>
+
+                <button class="botao-perfil" data-perfil="Funcionário">
+
+                    <svg viewBox="0 0 40 40" aria-hidden="true">
+                        <rect x="5" y="12" width="30" height="23" rx="3"/>
+                        <path d="M14 12 V8 C14 5 16 4 20 4 C24 4 26 5 26 8 V12"/>
+                        <path d="M20 12 V35"/>
+                    </svg>
+
+                    <span>Funcionário</span>
+
+                </button>
+
+                <button class="botao-perfil" data-perfil="Professor">
+
+                    <svg viewBox="0 0 40 40" aria-hidden="true">
+                        <path d="M2 13 L20 5 L38 13 L20 21 Z"/>
+                        <path d="M9 17 V27 C15 33 25 33 31 27 V17"/>
+                        <path d="M38 13 V25"/>
+                        <path d="M36 26 L38 30 L40 26"/>
+                    </svg>
+
+                    <span>Professor</span>
+
+                </button>
+
+            </div>
+
+            <p id="mensagem" aria-live="polite"></p>
+
+        </section>
+
+        <!-- Onda inferior -->
+        <img src="IMAGENS/onda.png"
+             class="onda onda-baixo"
+             alt="">
+
+    </main>
+
+    <script src="script.js"></script>
+
+</body>
+</html>

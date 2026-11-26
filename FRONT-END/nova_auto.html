@@ -1,0 +1,117 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Nova Autorização - Autoriza CESF</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="pagina-autorizacao">
+
+    <main class="celular">
+
+        <!-- CABEÇALHO -->
+        <header class="cabecalho">
+
+            <img src="IMAGENS/logo.png"
+                 alt="Logo Autoriza CESF"
+                 class="logo">
+
+        </header>
+
+        <!-- CONTEÚDO -->
+        <section class="conteudo">
+
+            <h1>Nova autorização de saída</h1>
+
+            <p class="descricao">
+                Preencha os dados abaixo para autorizar
+                a saída do aluno da sala de aula.
+            </p>
+
+            <form id="form-autorizacao">
+
+                <!-- NOME DO ALUNO -->
+                <div class="campo">
+                    <label for="aluno">
+                        Nome completo do aluno:
+                    </label>
+                    <input type="text" id="aluno" required>
+                </div>
+
+                <!-- TURMA -->
+                <div class="campo">
+                    <label for="turma">Turma:</label>
+                    <input type="text" id="turma" required>
+                </div>
+
+                <!-- PROFESSOR -->
+                <div class="campo">
+                    <label for="professor">Nome do Professor:</label>
+                    <input type="text" id="professor" required>
+                </div>
+
+                <!-- DATA E HORA -->
+                <div class="campo">
+                    <label for="data-hora">Data / Hora:</label>
+                    <input type="datetime-local"
+                           id="data-hora"
+                           required>
+                </div>
+
+                <!-- DESTINO -->
+                <div class="campo campo-destino">
+
+                    <label for="destino">Destino:</label>
+
+                    <select id="destino" required>
+
+                        <option value="" selected disabled>
+                            Selecione uma opção...
+                        </option>
+
+                        <option value="Banheiro">Banheiro</option>
+                        <option value="Secretaria">Secretaria</option>
+                        <option value="Coordenação">Coordenação</option>
+
+                    </select>
+
+                </div>
+
+                <!-- LIMPAR CAMPOS -->
+                <button type="button" id="limpar" class="limpar">
+                    Limpar Campo
+                </button>
+
+                <p id="mensagem" aria-live="polite"></p>
+
+                <!-- BOTÕES -->
+                <div class="botoes">
+
+                    <button type="button"
+                            id="voltar"
+                            class="botao-voltar">
+                        Voltar
+                    </button>
+
+                    <button type="submit" class="botao-emitir">
+                        Emitir autorização
+                    </button>
+
+                </div>
+
+            </form>
+
+        </section>
+
+    </main>
+
+    <script src="nova-autorizacao.js"></script>
+
+</body>
+</html>
