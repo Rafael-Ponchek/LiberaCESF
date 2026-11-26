@@ -2,7 +2,7 @@
 {
   "name": "autoriza-cesf",
   "version": "1.0.0",
-  "description": "Backend do sistema AUTORIZA CESF integrado ao Supabase",
+  "description": "Backend AUTORIZA CESF integrado ao Supabase",
   "main": "server.js",
   "type": "module",
   "scripts": {
