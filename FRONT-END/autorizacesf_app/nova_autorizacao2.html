@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nova autorização de saída | Autoriza CESF</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+  body { background: #fff; display: flex; justify-content: center; min-height: 100vh; }
+  .tela { width: 100%; max-width: 400px; padding: 18px 22px 22px; display: flex; flex-direction: column; min-height: 100vh; }
+  .topo { text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 12px; }
+  .logo-img { width: 110px; height: auto; margin: 0 auto 2px; display: block; }
+  h1 { font-size: 24px; margin: 18px 0 0; text-align: center; }
+  .sub { font-size: 14px; color: #333; margin: 18px 0 20px; line-height: 1.4; }
+  .campo { border: 1px solid #777; padding: 8px 12px 10px; margin-bottom: 22px; background: #fff; }
+  .campo label { display: block; font-size: 15px; font-weight: bold; margin-bottom: 6px; }
+  .campo input, .campo select { width: 100%; border: none; outline: none; font-size: 16px; background: transparent; padding: 4px 0; }
+  .campo select { text-align: center; text-align-last: center; cursor: pointer; }
+  #campo-outro { display: none; }
+  .limpar { display: block; font-size: 13px; color: #333; margin: -14px 0 22px; cursor: pointer; background: none; border: none; padding: 0; }
+  .rodape { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 20px; }
+  .voltar { color: #555; font-size: 18px; text-decoration: none; }
+  .btn-emitir { background: #8f1d1d; color: #fff; border: none; border-radius: 6px; padding: 14px 22px; font-size: 15px; cursor: pointer; }
+  .btn-emitir:hover { background: #7d1515; }
+  #mensagem { text-align: center; margin-top: 10px; font-size: 14px; min-height: 18px; }
+  .erro { color: #c00; } .ok { color: #0a7a2e; }
+</style>
+</head>
+<body>
+<div class="tela">
+  <div class="topo">
+    <img src="logo.png" alt="Logo Autoriza CESF" class="logo-img">
+  </div>
+  <h1>Nova autorização de saída</h1>
+  <p class="sub">Preencha os dados abaixo para autorizar a saída do aluno da sala de aula.</p>
+  <form id="form-autorizacao">
+    <div class="campo">
+      <label for="aluno">Nome completo do aluno:</label>
+      <input type="text" id="aluno">
+    </div>
+    <div class="campo">
+      <label for="turma">Turma:</label>
+      <input type="text" id="turma">
+    </div>
+    <div class="campo">
+      <label for="professor">Nome do Professor:</label>
+      <input type="text" id="professor">
+    </div>
+    <div class="campo">
+      <label for="datahora">Data / Hora:</label>
+      <input type="datetime-local" id="datahora">
+    </div>
+    <div class="campo">
+      <label for="destino">Destino:</label>
+      <select id="destino">
+        <option value="Biblioteca">Biblioteca</option>
+        <option value="Biblioteca">Biblioteca</option>
+        <option value="Outro">Outro</option>
+      </select>
+    </div>
+    <div class="campo" id="campo-outro">
+      <label for="outro">Qual outro destino?</label>
+      <input type="text" id="outro">
+    </div>
+    <button type="button" class="limpar" id="limpar">Limpar Campos</button>
+    <div class="rodape">
+      <a href="lista.html" class="voltar">Voltar</a>
+      <button type="submit" class="btn-emitir">Emitir autorização</button>
+    </div>
+    <p id="mensagem"></p>
+  </form>
+</div>
+<script>
+  const destino = document.getElementById('destino');
+  const campoOutro = document.getElementById('campo-outro');
+  destino.addEventListener('change', () => {
+    campoOutro.style.display = destino.value === 'Outro' ? 'block' : 'none';
+  });
+  document.getElementById('limpar').addEventListener('click', () => {
+    document.getElementById('form-autorizacao').reset();
+    campoOutro.style.display = 'none';
+    document.getElementById('mensagem').textContent = '';
+  });
+  document.getElementById('form-autorizacao').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const aluno = document.getElementById('aluno').value.trim();
+    const turma = document.getElementById('turma').value.trim();
+    const professor = document.getElementById('professor').value.trim();
+    const datahora = document.getElementById('datahora').value;
+    const msg = document.getElementById('mensagem');
+    if (!aluno || !turma || !professor || !datahora) { msg.textContent = 'Preencha todos os campos.'; msg.className = 'erro'; return; }
+    if (destino.value === 'Outro' && !document.getElementById('outro').value.trim()) { msg.textContent = 'Digite qual é o outro destino.'; msg.className = 'erro'; return; }
+    msg.textContent = 'Autorização emitida! Destino: ' + destino.value;
+    msg.className = 'ok';
+  });
+</script>
+</body>
+</html>
